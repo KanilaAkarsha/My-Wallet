@@ -12,10 +12,13 @@ async function main() {
   await connectDatabase();
   await assertTransactionsSupported();
   await seedSystemData();
+  // Bind the port first: hosts such as Render kill a service that is not listening in time, and
+  // startJobs() can wait indefinitely when REDIS_URL is set but Redis is unreachable.
+  const server = createApp().listen(e.PORT, '0.0.0.0', () => logger.info({ port: e.PORT }, 'API listening'));
   // RUN_JOBS=false lets you run API-only instances and a dedicated worker instance.
-  if (process.env.RUN_JOBS !== 'false') await startJobs();
-
-  const server = createApp().listen(e.PORT, () => logger.info({ port: e.PORT }, 'API listening'));
+  if (process.env.RUN_JOBS !== 'false') {
+    void startJobs().catch((err) => logger.error({ errName: (err as Error).name, msg: (err as Error).message }, 'background jobs failed to start; API keeps running'));
+  }
   server.requestTimeout = e.REQUEST_TIMEOUT_MS;
   server.headersTimeout = e.REQUEST_TIMEOUT_MS + 1000;
 
